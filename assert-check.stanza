@@ -1,0 +1,42 @@
+defpackage assert-check :
+  import core
+  import stz/core-macros
+
+defsyntax assert-check :
+    import exp4 from core
+
+    defn recGetSymbols (check-expr) -> List :
+         var ret = List()
+
+         match(check-expr) :
+             (l:List):
+                for i in 0 to length(l) do:
+                    val newSymbs = recGetSymbols(l[i])
+                    ret = append(newSymbs, ret)
+             (s:Symbol):
+                println("Symbol: %~" % [s])
+                ret = cons(s, ret)
+             (t:Token):
+                val unWrap = unwrap-token(t)
+                ret = append(recGetSymbols(unWrap), ret)
+             (x) : println("unknown type: %~" % [x])
+         ret
+
+    defrule exp4 = (assert(?check-expr)) :
+        ;println("Assert Check")
+        println("check-expr = %~" % [check-expr])
+
+        val symbs = recGetSymbols(check-expr)
+        println("Content: %~" % [symbs])
+
+        val info = info(check-expr)
+        println("info: %~" % [info])
+        val format-string = to-string("ASSERT: %_ = %%~" % [check-expr])
+        val symb0 = symbs[0]
+        val symbName = name(symbs[0])
+        val symbol-string = to-string("Symbol: %_ = %%~" % [symbName])
+        println("SymbFMT: %~" % [symbol-string])
+
+        val form = qquote(if not ~ check-expr: ( println(~ format-string % [~ check-expr]), println(~ symbol-string % [~ symb0]) println("Fail here")))
+        println("Code: %~" % [form])
+        parse-syntax[core / #exp](form)
