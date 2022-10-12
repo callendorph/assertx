@@ -1,0 +1,53 @@
+#use-added-syntax(tests)
+#use-added-syntax(assert-check)
+defpackage assert-tests :
+  import core
+  import collections
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; @NOTE - these tests expect that the
+;;   '__ASSERT_CHECK_TESTING' Environment variable
+;;   which causes the asserts not to call fatal()
+;;;;;;;;;;;;;;;;;;;;;;;
+
+defn capture-output<?T> ( func : () -> ?T ) -> String :
+        val buf = StringBuffer(128)
+        val result:T = with-output-stream(buf, func)
+        to-string(buf)
+
+deftest basic-assert :
+
+        defn test-no-assert () :
+             val a = 1
+             val b = 2
+             assert( a < b )
+
+        defn test-with-assert () :
+             val a = 1
+             val b = 2
+             assert( a > b )
+
+        var outStr:String
+
+        outStr = capture-output(test-no-assert)
+        #EXPECT( length(outStr) == 0 )
+
+        outStr = capture-output(test-with-assert)
+        #EXPECT( length(outStr) > 0 )
+
+        val lines = split(outStr, "\n")
+        val aline = next(lines)
+        #EXPECT( prefix?(aline, "ASSERT:") )
+
+        var pos
+        pos = index-of-chars(aline, "greater?")
+        #EXPECT( pos != false )
+
+        val symbols = next(lines)
+        #EXPECT( prefix?(symbols, "SYMBOLS:") )
+
+        pos = index-of-chars(symbols, "\"a\" => 1")
+        #EXPECT( pos != false )
+
+        pos = index-of-chars(symbols, "\"b\" => 2")
+        #EXPECT( pos != false )
