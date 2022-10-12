@@ -4,6 +4,8 @@ defpackage assert-check :
     import stz/core-macros
     import macro-utils
 
+val TESTING_ENV = get-env("__ASSERT_CHECK_TESTING")
+
 defsyntax assert-check :
     import (exp4, exp!) from core
 
@@ -29,13 +31,20 @@ defsyntax assert-check :
 
         val template = `(
             if not check:
-               println(check-format % [ check ])
+               val fail = StringBuffer(128)
+               print(fail, check-format % [ check ])
+
+               val symbTable = [ symbols{symbName => symb} ]
+               print(fail, "\nSYMBOLS: %~" % [symbTable])
                val msg = msg-content
                if length(msg) > 0 :
-                   println("MSG: %~" % [ msg-content ])
-               val symbTable = [ symbols{symbName => symb} ]
-               println("Symbols: %~" % [symbTable])
-               println("Fail Here"))
+                   print(fail, "\nMSG: %~" % [ msg ])
+
+               if testing-only :
+                   println(to-string(fail))
+               else:
+                   fatal(to-string(fail))
+            )
 
         ; I can't just pass the argSymbs List of symbols
         ;   to the template because it gets evaluate at
@@ -52,12 +61,12 @@ defsyntax assert-check :
 
         val symbTable = to-tuple(map(extract-kvp, argSymbs))
 
-
         val replacements = [
             `check => unwrap-token(check-expr)
             `check-format => format-string
             `msg-content =>  msg
             `symbols => nested $ symbTable
+            `testing-only => (TESTING_ENV != false)
         ]
 
         fill-template(template, replacements)
