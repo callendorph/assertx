@@ -1,42 +1,71 @@
 defpackage assert-check :
-  import core
-  import stz/core-macros
+    import core
+    import collections
+    import stz/core-macros
+    import macro-utils
 
 defsyntax assert-check :
-    import exp4 from core
+    import (exp4, exp!) from core
 
-    defn recGetSymbols (check-expr) -> List :
-         var ret = List()
+    ; This should really be recursive - but
+    ;   I haven't gotten there yet.
+    defn find-arg-symbols (form) -> List<Symbol> :
+        match-syntax(form) :
+            ($do ?f ?args ...) :
+                to-list $
+                    for arg in unwrap-all(args) filter :
+                       arg is Symbol
+            (_ ...) :
+                throw( Exception("Unsupported pattern within assert: Received %_" % [form]))
 
-         match(check-expr) :
-             (l:List):
-                for i in 0 to length(l) do:
-                    val newSymbs = recGetSymbols(l[i])
-                    ret = append(newSymbs, ret)
-             (s:Symbol):
-                println("Symbol: %~" % [s])
-                ret = cons(s, ret)
-             (t:Token):
-                val unWrap = unwrap-token(t)
-                ret = append(recGetSymbols(unWrap), ret)
-             (x) : println("unknown type: %~" % [x])
-         ret
+    defn handleAssert (check-expr, msg) :
+        ;println("check-expr = %_" % [check-expr])
+        ;println("msg = %_" % [msg])
 
-    defrule exp4 = (assert(?check-expr)) :
-        ;println("Assert Check")
-        println("check-expr = %~" % [check-expr])
+        val argSymbs = find-arg-symbols(check-expr)
+        ;println("Found Args: %~" % [argSymbs])
 
-        val symbs = recGetSymbols(check-expr)
-        println("Content: %~" % [symbs])
-
-        val info = info(check-expr)
-        println("info: %~" % [info])
         val format-string = to-string("ASSERT: %_ = %%~" % [check-expr])
-        val symb0 = symbs[0]
-        val symbName = name(symbs[0])
-        val symbol-string = to-string("Symbol: %_ = %%~" % [symbName])
-        println("SymbFMT: %~" % [symbol-string])
 
-        val form = qquote(if not ~ check-expr: ( println(~ format-string % [~ check-expr]), println(~ symbol-string % [~ symb0]) println("Fail here")))
-        println("Code: %~" % [form])
+        val template = `(
+            if not check:
+               println(check-format % [ check ])
+               val msg = msg-content
+               if length(msg) > 0 :
+                   println("MSG: %~" % [ msg-content ])
+               val symbTable = [ symbols{symbName => symb} ]
+               println("Symbols: %~" % [symbTable])
+               println("Fail Here"))
+
+        ; I can't just pass the argSymbs List of symbols
+        ;   to the template because it gets evaluate at
+        ;   runtime. So I must extract this out into a
+        ;   mapping of "Name" -> "Symbol"
+        ;
+        ; To accomplist this - I must use the `nested`
+        ;   utility of the fill-template. Otherwise, the
+        ;   fill-template won't unpack the KVP's as s-expressions
+        ;   and this causes syntax errors.
+
+        defn extract-kvp (x:Symbol) :
+             [KeyValue(`symbName, name(x)) KeyValue(`symb, x)]
+
+        val symbTable = to-tuple(map(extract-kvp, argSymbs))
+
+
+        val replacements = [
+            `check => unwrap-token(check-expr)
+            `check-format => format-string
+            `msg-content =>  msg
+            `symbols => nested $ symbTable
+        ]
+
+        fill-template(template, replacements)
+
+    defrule exp4 = (assert(?check-expr:#exp!)) :
+        val form = handleAssert(check-expr, "")
+        parse-syntax[core / #exp](form)
+
+    defrule exp4 = (assert(?check-expr:#exp!, ?msg:#exp!)) :
+        val form = handleAssert(check-expr, msg)
         parse-syntax[core / #exp](form)
