@@ -1,12 +1,15 @@
 
 
-all: assertx
+all: assertx plugin
 
 ASSERTX=./assertx
 
 # Build the extended compiler
 assertx: assert-check.stanza
 	stanza extend assert-check.stanza -o $(ASSERTX)
+
+plugin: assert-check.stanza
+	stanza compile-macros $< -o assertx.macros -optimize
 
 TESTBIN=./run_tests
 
